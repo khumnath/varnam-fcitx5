@@ -369,6 +369,7 @@ void VarnamState::selectCandidate(int index) {
 
 void VarnamState::commitText(const FcitxKeySym &key) {
     auto candidates = ic_->inputPanel().candidateList();
+    std::stringstream ss;
     std::string stringToCommit;
     std::string wordToLearn;
     bool isWordBreakKey = isWordBreak(key);
@@ -376,9 +377,9 @@ void VarnamState::commitText(const FcitxKeySym &key) {
 
     if (isWordBreakKey) {
         if (candidates && candidates->cursorIndex() >= 0) {
-            stringToCommit = candidates->candidate(candidates->cursorIndex()).text().toStringForCommit();
+            ss << candidates->candidate(candidates->cursorIndex()).text().toStringForCommit();
         } else {
-            stringToCommit = preedit_.toStringForCommit();
+            ss << preedit_.toStringForCommit();
         }
 
         if (enablePunctuation) { // If punctuation processing is enabled
@@ -389,40 +390,39 @@ void VarnamState::commitText(const FcitxKeySym &key) {
             if (getVarnamResult() && result_ && varray_length(result_) > 0) {
                 vword *result_word = static_cast<vword *>(varray_get(result_, 0));
                 if (result_word) {
-                    stringToCommit = stringutils::concat(stringToCommit, result_word->text);
+                    ss << result_word->text;
                 }
             }
         } else {
             // If punctuation processing is not enabled
-            // Append the punctuation character to stringToCommit
-            stringToCommit += getWordBreakChar(key);
-            // Set wordToLearn to the base candidate text without punctuation
+            ss << getWordBreakChar(key);
             wordToLearn = candidates->candidate(candidateSelected).text().toStringForCommit();
         }
     } else if (key == FcitxKey_Escape || key == FcitxKey_0 ||
                !candidates || candidates->size() <= 1 || !result_ || varray_is_empty(result_)) {
         // Handle escape or special keys
-        stringToCommit.assign(preedit_.toStringForCommit());
+        ss << preedit_.toStringForCommit();
         candidateSelected = 0;
     } else if ((candidates->cursorIndex() <= 0) && !candidateSelected) {
         // Handle the case where no candidate is selected
         vword *first_result = static_cast<vword *>(varray_get(result_, 0));
         if (first_result) {
-            stringToCommit.assign(first_result->text);
+            ss << first_result->text;
             candidateSelected = 1;
         }
     } else {
         // Handle regular candidate selection
-        stringToCommit.assign(candidates->candidate(candidateSelected).text().toStringForCommit());
+        ss << candidates->candidate(candidateSelected).text().toStringForCommit();
     }
 
-      wordToLearn = stringToCommit;
+    stringToCommit = ss.str();
+    wordToLearn = stringToCommit;
 #ifdef DEBUG_MODE
     VARNAM_INFO() << "string to commit:" << stringToCommit << " "
                   << getWordBreakChar(key);
 #endif
     ic_->commitString(stringToCommit);
-if (stringToCommit.empty() || lastTypedCharIsDigit || isWordBreakKey ||
+    if (stringToCommit.empty() || lastTypedCharIsDigit || isWordBreakKey ||
         ic_->capabilityFlags().test(CapabilityFlag::PasswordOrSensitive) ||
         !engine_->getConfig()->shouldLearnWords.value() || !candidateSelected) {
         reset();
